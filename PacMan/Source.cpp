@@ -401,6 +401,18 @@ public:
     int getLastDirection() const { return lastDirection; }
     void setAll(int a, int b, int c, int d, int e) { x = a, y = b, score = c, d = direction, e = lastDirection; }
 
+    /*Ghost& operator=(const Ghost& other) {
+        if (this == &other) { // Проверка на самоприсваивание
+            return *this;
+        }
+        x = other.x;
+        y = other.y;
+        score = other.score;
+        direction = other.direction;
+        lastDirection = other.lastDirection;
+        return *this;
+    }*/
+
     // Перегрузка оператора + (сложение)
     Ghost operator+(const Ghost& other) const {
         return Ghost(
@@ -507,7 +519,7 @@ class Blinky : public Ghost {
 public:
     ~Blinky() {};
     Blinky() {};
-    Blinky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};
+    Blinky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};  //вызов конструктора базового класса
     void ghostDraw(sf::Color color, RenderWindow& window, GameSettings settings)                         // Перегрузка метода без вызова метода базового класса
     {
         RectangleShape ghostShape(Vector2f(settings.getGridSize() / 1.5, settings.getGridSize() / 1.5));
@@ -525,7 +537,7 @@ class Pinky : public Ghost {
 public:
     ~Pinky() {};
     Pinky() {};
-    Pinky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};
+    Pinky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};    //вызов конструктора базового класса
     void PinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window, Food food) {
         int a = pacman.getX(), b = pacman.getY();
         switch (pacman.getNextDirection())
@@ -613,10 +625,24 @@ public:
 };
 
 class Inky : public Ghost {
+private:
+    int inkySpecific;
 public:
     ~Inky() {};
     Inky() {};
-    Inky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};
+    Inky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};   //вызов конструктора базового класса
+
+    Inky& operator=(const Ghost& baseGhost) {
+        if (this != &baseGhost) {
+            this->x = baseGhost.getX();
+            this->y = baseGhost.getY();
+            this->score = baseGhost.getScore();
+            this->direction = baseGhost.getDirection();
+            this->lastDirection = baseGhost.getLastDirection();
+        }
+        return *this;
+    }
+
     void InkyMove(Pacman pacman, Map map, Ghost blinky, GameSettings settings, RenderWindow& window) {
         int a = pacman.getX(), b = pacman.getY();
         switch (pacman.getNextDirection())
@@ -645,7 +671,7 @@ class Clyde : public Ghost {
 public:
     ~Clyde() {};
     Clyde() {};
-    Clyde(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};
+    Clyde(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};   //вызов конструктора базового класса
     void ClydeMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window) {
         int a, b;
         float mainDistance = distance(pacman.getX(), pacman.getY(), x, y);
