@@ -6,7 +6,9 @@
 #include <iostream>
 #include <random>
 #include <chrono>
-
+#include <sstream>
+#include <WIndows.h>
+#include <iostream>
 
 using namespace sf;
 using namespace std;
@@ -78,13 +80,27 @@ public:
     sf::Color getPinkyColor() const { return pinkyColor; }
     sf::Color getInkyColor() const { return inkyColor; }
     sf::Color getClydeColor() const { return clydeColor; }
+
+    // Перегрузка оператора << для вывода
+    friend std::ostream& operator<<(std::ostream& os, const GameSettings& settings) {
+        os << "Window Title: " << settings.windowTitle << "\n"
+            << "Grid Size: " << settings.gridSize << "\n"
+            << "Pacman Start X: " << settings.pacmanStartX << "\n"
+            << "Pacman Start Y: " << settings.pacmanStartY << "\n";
+        return os;
+    }
 };
 
 class Tile {
 public:
-    char type; // 'X', 'o', ' ', 'P' и т.д.
-    bool isPassable;   //можно ли пройти через клетку
+    char type;
+    bool isPassable;
     Tile(char type = ' ', bool isPassable = true) : type(type), isPassable(isPassable) {}
+
+    friend std::ostream& operator<<(std::ostream& os, const Tile& tile) {
+        os << "Type: " << tile.type << ", Passable: " << (tile.isPassable ? "true" : "false");
+        return os;
+    }
 };
 
 class Pacman {
@@ -108,28 +124,29 @@ public:
     void setPoints(int a) { points = a; }
     void setNextDirection(int a) { nextDirection = a; }
     void loseLife() { lives--; }
-    void addPoints(int points) { this->points += points; }                                  //оператор this
-    static int getMaxPoints(); // объявление статического метода
+    void addPoints(int points) { this->points += points; }
+    static int getMaxPoints();
     static void updateMaxPoints(int newPoints);
     int* getPointsPointer() {
-        return &points; // Возвращаем указатель на переменную score
+        return &points;
     }
     int& getLivesReference() {
-        return lives; // Возвращаем ссылку на переменную lives
+        return lives;
     }
 
     void PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit);
 
     int WonOrLost(Food smallFood, Food bigFood, Text& Result);
+    friend std::ostream& operator<<(std::ostream& os, const Pacman& pacman) {
+        os << "Pacman: x=" << pacman.x << ", y=" << pacman.y << ", score=" << pacman.score << ", lives=" << pacman.lives << ", points=" << pacman.points;
+        return os;
+    }
 };
 
 int Pacman::maxPoints = 0; // Инициализация статической переменной
-// Реализация статического метода
 int Pacman::getMaxPoints() {
     return maxPoints;
 }
-
-// Реализация статического метода
 void Pacman::updateMaxPoints(int newScore) {
     if (newScore > maxPoints)
         maxPoints = newScore;
@@ -152,15 +169,19 @@ public:
     static void setTotalFoodCount(int count);
     friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit);
     friend int Pacman::WonOrLost(Food smallFood, Food bigFood, Text& Result);
+    friend std::ostream& operator<<(std::ostream& os, const Food& food) {
+        os << "Food: count=" << food.count << ", point=" << food.point << ", type=" << food.type;
+        return os;
+    }
 };
-int Food::totalFoodCount = 0; // Инициализация статического поля вне класса
+int Food::totalFoodCount = 0;
 int Food::getTotalFoodCount() { return Food::totalFoodCount; }
 void Food::setTotalFoodCount(int count) { Food::totalFoodCount = count; }
 
 class Map {
 private:
     int H, W;
-    std::vector<std::vector<Tile>> Mase;  //двумерный массив элементов класса Tile
+    std::vector<std::vector<Tile>> Mase;
 public:
     ~Map() {};
     Map(int H, int W) : H(H), W(W) { Mase.resize(H, std::vector<Tile>(W)); }
@@ -207,7 +228,7 @@ public:
             " XXXXXXXXXXXXXXXXXXXXXXXXXXXX ",
             "                              ",
         };
-        for (int i = 0; i < H; ++i) {            //формирование двумерного массива
+        for (int i = 0; i < H; ++i) {
             for (int j = 0; j < W; ++j) {
                 Mase[i][j] = Tile(tempMase[i][j], tempMase[i][j] != 'X');
             }
@@ -223,10 +244,9 @@ public:
         biglCircle.setFillColor(settings.getCircle2Color());
         RectangleShape pacman(Vector2f(settings.getGridSize(), settings.getGridSize()));
         pacman.setFillColor(settings.getPacmanColor());
-       ;
-        for (int i = 0; i < H; i++)
-            for (int j = 0; j < W; j++)
-            {
+
+        for (int i = 0; i < H; i++) {
+            for (int j = 0; j < W; j++) {
                 if (Mase[i][j].type == 'X')
                 {
                     square.setPosition(j * settings.getGridSize(), i * settings.getGridSize());
@@ -235,8 +255,6 @@ public:
                 else if (Mase[i][j].type == smallFood.getType())
                 {
                     smallCircle.setPosition(j * settings.getGridSize() + 8.5, i * settings.getGridSize() + 8.5f);
-                    int pacmanX = static_cast<int>(pacman.getPosition().y / settings.getGridSize());
-                    int pacmanCol = static_cast<int>(pacman.getPosition().x / settings.getGridSize());
                     window.draw(smallCircle);
                 }
                 else if (Mase[i][j].type == bigFood.getType())
@@ -254,20 +272,32 @@ public:
                     window.draw(fruitShape);
                 }
             }
+        }
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Map& map) {
+        os << "Map: H=" << map.H << ", W=" << map.W << "\n";
+        for (const auto& row : map.Mase) {
+            for (const auto& tile : row) {
+                os << tile.type;
+            }
+            os << "\n";
+        }
+        return os;
     }
 };
 
 
 class Fruit {
 private:
-    int x;       //координата X на карте
-    int y;       //координата Y на карте
-    int points;  //количество очков за съедение
-    Sprite sprite; //графическое представление
-    static bool isActive;  //активен ли фрукт
+    int x;
+    int y;
+    int points;
+    Sprite sprite;
+    static bool isActive;
 public:
     Fruit() {};
-    Fruit(int points, Sprite sprite) : points(points), sprite(sprite)  {}
+    Fruit(int points, Sprite sprite) : points(points), sprite(sprite) {}
     int getX() const { return x; }
     int getY() const { return y; }
     int getPoints() const { return points; }
@@ -277,10 +307,10 @@ public:
     friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit);
 
     void createFruit(GameSettings& settings, Map& map, RenderWindow& window, Food food) {
-        if ((food.getTotalFoodCount() == 176 || food.getTotalFoodCount() == 76) && !isActive)  //когда Пакман съел первые 70 или 170 точек
+        if ((food.getTotalFoodCount() == 176 || food.getTotalFoodCount() == 76) && !isActive)
         {
             int randY, randX;
-            do {                                           //выбор случайных координат
+            do {
                 randY = rand() % 30 + 4;
                 randX = rand() % 23 + 4;
             } while (map.getTile(randY, randX).type != ' ');
@@ -289,16 +319,20 @@ public:
             sprite.setPosition(randX * settings.getGridSize(), randY * settings.getGridSize());
             isActive = true;
         }
-        if (isActive)                                 //если фрукт активен, добавляем его на карту
+        if (isActive)
         {
             map.setTile(y, x, 'F');
         }
+    }
+    friend std::ostream& operator<<(std::ostream& os, const Fruit& fruit) {
+        os << "Fruit: x=" << fruit.x << ", y=" << fruit.y << ", points=" << fruit.points << ", isActive=" << fruit.isActive;
+        return os;
     }
 };
 
 bool Fruit::isActive = false;
 
-void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit)         //дружественная функция
+void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit)
 {
     if (Keyboard::isKeyPressed(Keyboard::Up) && map.Mase[nextY - 1][nextX].isPassable && !(nextY == 17 && nextX == 0 || nextY == 17 && nextX == map.getW() - 1)) {
         nextDirection = 0;
@@ -385,7 +419,6 @@ int Pacman::WonOrLost(Food smallFood, Food bigFood, Text& Result)
     else f = 0;
     return f;
 }
-
 
 class Ghost {
 protected:                                         //модификатор protected
@@ -513,6 +546,11 @@ public:
         if (lastDirection != direction && change)
             lastDirection = direction;
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const Ghost& ghost) {
+        os << "Ghost: x=" << ghost.x << ", y=" << ghost.y << ", score=" << ghost.score << ", direction=" << ghost.direction << ", lastDirection=" << ghost.lastDirection;
+        return os;
+    }
 };
 
 class Blinky : public Ghost {
@@ -555,7 +593,7 @@ public:
             a = a + 4;
             break;
         }
-        if (food.getTotalFoodCount() < 50) //если в лабиринте осталось меньше 50 точек
+        if (food.getTotalFoodCount() < 20) //если в лабиринте осталось меньше 20 точек
         {
             float distanceUp, distanceDown, distanceLeft, distanceRight;
             double minDistance = INFINITY;
@@ -827,11 +865,21 @@ public:
         map.setTile(pacman.getY(), pacman.getX(), ' ');
         map.setTile(settings.getPacmanStartY(), settings.getPacmanStartX(), 'P');
         Result.setString(" ");
+        std::cout << "Настройки: \n" << settings << std::endl;
+        std::cout << "Карта: \n" << map << std::endl;
+        std::cout << "Пакман: " << pacman << std::endl << std::endl; // std::endl в конце каждого блока
+
     }
 };
 
 int main()
 {
+    AllocConsole();
+
+    FILE* fDummy;
+    freopen_s(&fDummy, "CONOUT$", "w", stdout);
+    freopen_s(&fDummy, "CONOUT$", "w", stderr);
+    freopen_s(&fDummy, "CONIN$", "r", stdin);
     Game game;
     //динамический массив объектов класса GameSettings 
     GameSettings* settingsArray;
@@ -957,6 +1005,11 @@ int main()
      // Координаты pinky после pinky++: x=14, y=14
      // Координаты tempPinky после pinky++: x=13, y=14
 
+
+    std::cout << "Настройки: \n" << settings << std::endl;
+    std::cout << "Карта: \n" << map << std::endl;
+    std::cout << "Пакман: " << pacman << std::endl << std::endl; // std::endl в конце каждого блока
+
     while (window.isOpen())
     {
         Event event;
@@ -987,6 +1040,7 @@ int main()
             Result.setPosition((windowSize.x - textBounds.width) / 2, (windowSize.y - textBounds.height) / 2 - 50);
             window.draw(Result);
             pacman.updateMaxPoints(pacman.getPoints());
+  
         }
         else
         {
