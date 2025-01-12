@@ -508,6 +508,13 @@ public:
     ~Blinky() {};
     Blinky() {};
     Blinky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};
+    void ghostDraw(sf::Color color, RenderWindow& window, GameSettings settings)                         // Перегрузка метода без вызова метода базового класса
+    {
+        RectangleShape ghostShape(Vector2f(settings.getGridSize() / 1.5, settings.getGridSize() / 1.5));
+        ghostShape.setFillColor(color);
+        ghostShape.setPosition(getX() * settings.getGridSize() + settings.getGridSize() / 6, getY() * settings.getGridSize() + settings.getGridSize() / 6); //другое положение и размер
+        window.draw(ghostShape);
+    }
     void BlinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window) {
         move(map, pacman.getX(), pacman.getY());
         ghostDraw(settings.getBlinkyColor(), window, settings);
@@ -519,7 +526,7 @@ public:
     ~Pinky() {};
     Pinky() {};
     Pinky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};
-    void PinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window) {
+    void PinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window, Food food) {
         int a = pacman.getX(), b = pacman.getY();
         switch (pacman.getNextDirection())
         {
@@ -536,7 +543,71 @@ public:
             a = a + 4;
             break;
         }
-        move(map, a, b);
+        if (food.getTotalFoodCount() < 50) //если в лабиринте осталось меньше 50 точек
+        {
+            float distanceUp, distanceDown, distanceLeft, distanceRight;
+            double minDistance = INFINITY;
+            int change = 0;
+
+            distanceUp = distance(a, b, x, y - 1);
+            distanceDown = distance(a, b, x, y + 1);
+            if (y == 17 && x == 1)
+                distanceLeft = distance(a, b, map.getW() - 1, y);
+            else distanceLeft = distance(a, b, x - 1, y);
+            if (y == 17 && x == map.getW() - 1)
+                distanceRight = distance(a, b, 0, y);
+            else distanceRight = distance(a, b, x + 1, y);
+
+            if (distanceRight <= minDistance && map.getTile(y, x + 1).isPassable && lastDirection != 2) {
+                minDistance = distanceRight;
+                direction = 3;
+            }
+            if (distanceUp <= minDistance && map.getTile(y - 1, x).isPassable && lastDirection != 1 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
+                minDistance = distanceUp;
+                direction = 0;
+            }
+            if (distanceLeft <= minDistance && map.getTile(y, x - 1).isPassable && lastDirection != 3) {
+                minDistance = distanceLeft;
+                direction = 2;
+            }
+            if (distanceDown <= minDistance && map.getTile(y + 1, x).isPassable && lastDirection != 0 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
+                minDistance = distanceDown;
+                direction = 1;
+            }
+
+            score++;
+            if (score >= 100)                        //то  призрак ускоряется
+            {
+                change = 1;
+                // Двигаемся в выбранном направлении
+                switch (direction) {
+                case 0: //Движение вверх
+                    y--;
+                    break;
+                case 1: //Движение вниз
+                    y++;
+                    break;
+                case 2: //Движение влево
+                    if (y == 17 && x == 1)
+                        x = map.getW() - 2;
+                    else
+                        x--;
+                    break;
+                case 3: //Движение вправо
+                    if (y == 17 && x == map.getW() - 2)
+                        x = 1;
+                    else
+                        x++;
+                    break;
+                default:
+                    break;
+                }
+                score = 0;
+            }
+            if (lastDirection != direction && change)
+                lastDirection = direction;
+        }
+        else Ghost::move(map, a, b); // Вызов метода базового класса
         ghostDraw(settings.getPinkyColor(), window, settings);
     }
 };
@@ -897,7 +968,7 @@ int main()
             //combinedGhost = blinky + pinky;
             //combinedGhost.ghostDraw(Color::White, window, settings);
             blinky.BlinkyMove(pacman, map, settings, window);
-            pinky.PinkyMove(pacman, map, settings, window);
+            pinky.PinkyMove(pacman, map, settings, window, smallFood);
             inky.InkyMove(pacman, map, blinky, settings, window);
             clyde.ClydeMove(pacman, map, settings, window);
             if (clyde.Lose(pacman, blinky, pinky, inky))
