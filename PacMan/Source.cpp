@@ -388,7 +388,7 @@ int Pacman::WonOrLost(Food smallFood, Food bigFood, Text& Result)
 
 
 class Ghost {
-protected:
+protected:                                         //модификатор protected
     int x, y, score, direction, lastDirection;
 public:
     Ghost() {};
