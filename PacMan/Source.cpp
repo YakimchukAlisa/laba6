@@ -92,6 +92,64 @@ public:
     }
 };
 
+
+template <typename ResourceType, typename ResourceKey = std::string>
+class ResourceManager {
+public:
+    using ResourcePtr = std::shared_ptr<ResourceType>;
+
+    ResourcePtr load(const ResourceKey& key, const std::string& filePath) {
+        auto it = resources_.find(key);
+        if (it != resources_.end()) {
+            return it->second;
+        }
+
+        auto resource = std::make_shared<ResourceType>();
+        if (!loadResource(resource, filePath))
+            return nullptr; // Не удалось загрузить ресурс
+        resources_[key] = resource;
+        return resource;
+    }
+
+    ResourcePtr get(const ResourceKey& key) const {
+        auto it = resources_.find(key);
+        if (it != resources_.end()) {
+            return it->second;
+        }
+        return nullptr; // Ресурс не найден
+    }
+
+    void unload(const ResourceKey& key) {
+        resources_.erase(key);
+    }
+
+    void unloadAll() {
+        resources_.clear();
+    }
+
+protected:
+    virtual bool loadResource(std::shared_ptr<ResourceType>& resource, const std::string& filePath) = 0;
+
+private:
+    std::map<ResourceKey, ResourcePtr> resources_;
+};
+
+
+class TextureManager : public ResourceManager<sf::Texture> {
+protected:
+    bool loadResource(std::shared_ptr<sf::Texture>& resource, const std::string& filePath) override {
+        return resource->loadFromFile(filePath);
+    }
+};
+
+
+class FontManager : public ResourceManager<sf::Font> {
+protected:
+    bool loadResource(std::shared_ptr<sf::Font>& resource, const std::string& filePath) override {
+        return resource->loadFromFile(filePath);
+    }
+};
+
 class Tile {
 public:
     char type;
@@ -1211,35 +1269,67 @@ int main()
     Food smallFood(242, 5, 'o');
     Food bigFood(4, 10, 'O');
 
-    sf::Texture cherryTexture;
-    cherryTexture.loadFromFile("images/cherry.png");
+    TextureManager textureManager;
+    // Загружаем текстуры с помощью TextureManager
+    auto cherryTexturePtr = textureManager.load("cherry", "images/cherry.png");
+    auto appleTexturePtr = textureManager.load("apple", "images/apple.png");
+    auto pearTexturePtr = textureManager.load("pear", "images/pear.png");
+    auto orangeTexturePtr = textureManager.load("orange", "images/orange.png");
+    auto watermelonTexturePtr = textureManager.load("watermelon", "images/watermelon.png");
     sf::Sprite cherryShape;
-    cherryShape.setTexture(cherryTexture);
-    cherryShape.setScale(0.1f, 0.1f);
+    if (cherryTexturePtr)
+    {
+        cherryShape.setTexture(*cherryTexturePtr);
+        cherryShape.setScale(0.1f, 0.1f);
+    }
+    else
+    {
+        std::cerr << "Error loading cherry texture" << std::endl;
+    }
 
-    sf::Texture appleTexture;
-    appleTexture.loadFromFile("images/apple.png");
     sf::Sprite appleShape;
-    appleShape.setTexture(appleTexture);
-    appleShape.setScale(0.02f, 0.02f);
+    if (appleTexturePtr)
+    {
+        appleShape.setTexture(*appleTexturePtr);
+        appleShape.setScale(0.02f, 0.02f);
+    }
+    else
+    {
+        std::cerr << "Error loading apple texture" << std::endl;
+    }
 
-    sf::Texture pearTexture;
-    pearTexture.loadFromFile("images/pear.png");
     sf::Sprite pearShape;
-    pearShape.setTexture(pearTexture);
-    pearShape.setScale(0.1f, 0.1f);
+    if (pearTexturePtr)
+    {
+        pearShape.setTexture(*pearTexturePtr);
+        pearShape.setScale(0.1f, 0.1f);
+    }
+    else
+    {
+        std::cerr << "Error loading pear texture" << std::endl;
+    }
 
-    sf::Texture orangeTexture;
-    orangeTexture.loadFromFile("images/orange.png");
     sf::Sprite orangeShape;
-    orangeShape.setTexture(orangeTexture);
-    orangeShape.setScale(0.1f, 0.1f);
+    if (orangeTexturePtr)
+    {
+        orangeShape.setTexture(*orangeTexturePtr);
+        orangeShape.setScale(0.1f, 0.1f);
+    }
+    else
+    {
+        std::cerr << "Error loading orange texture" << std::endl;
+    }
 
-    sf::Texture watermelonTexture;
-    watermelonTexture.loadFromFile("images/watermelon.png");
     sf::Sprite watermelonShape;
-    watermelonShape.setTexture(watermelonTexture);
-    watermelonShape.setScale(0.03f, 0.03f);
+    if (watermelonTexturePtr)
+    {
+        watermelonShape.setTexture(*watermelonTexturePtr);
+        watermelonShape.setScale(0.03f, 0.03f);
+    }
+    else
+    {
+        std::cerr << "Error loading watermelon texture" << std::endl;
+    }
 
     //массив фруктов
     Fruit fruitArray[5];
@@ -1260,14 +1350,16 @@ int main()
     Inky& inky = *static_cast<Inky*>(ghostArray[2]);
     Clyde& clyde = *static_cast<Clyde*>(ghostArray[3]);
 
-    sf::Font font;
     sf::RenderWindow windoww; //объявляем окно
-    try {
-        if (!font.loadFromFile("Unformital Medium.ttf")) {           //если загрузка шрифта не удалась
-            throw std::runtime_error("Failed to load font.");        //вызывается исключение
-        }
-    }
-    catch (const std::runtime_error& e) {                           //обработка исключения
+
+    // Создаем экземпляр FontManager
+    FontManager fontManager;
+
+    // Загружаем шрифт с помощью FontManager
+    auto fontPtr = fontManager.load("default_font", "Unformital Medium.ttf");
+
+    if (!fontPtr) {
+        // Если загрузка шрифта не удалась, выводим ошибку и завершаем программу
         windoww.create(sf::VideoMode(700, 200), "Error: Font not loaded. Press any key to close"); //создаём окно
         while (windoww.isOpen()) {
             sf::Event event;
@@ -1277,8 +1369,9 @@ int main()
                 }
             }
         }
-        return EXIT_FAILURE;                                   //завершаем программу
+        return EXIT_FAILURE;
     }
+    sf::Font& font = *fontPtr;
 
     sf::Text pointsText;
     pointsText.setFont(font);
