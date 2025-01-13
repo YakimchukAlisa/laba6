@@ -16,6 +16,7 @@ using namespace std;
 class Food;
 class Map;
 class Fruit;
+class Ghost;
 
 class GameSettings {
 private:
@@ -134,14 +135,17 @@ public:
         return lives;
     }
 
-    void PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit);
+    void PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit,Ghost** ghost);
 
     int WonOrLost(Food smallFood, Food bigFood, Text& Result);
     friend std::ostream& operator<<(std::ostream& os, const Pacman& pacman) {
         os << "Pacman: x=" << pacman.x << ", y=" << pacman.y << ", score=" << pacman.score << ", lives=" << pacman.lives << ", points=" << pacman.points;
         return os;
     }
+
+    void setGhostsFrightened(Ghost** ghosts, int duration);
 };
+
 
 int Pacman::maxPoints = 0; // Инициализация статической переменной
 int Pacman::getMaxPoints() {
@@ -167,7 +171,7 @@ public:
     void decreaseCount() { count--; totalFoodCount--; }
     static int getTotalFoodCount();
     static void setTotalFoodCount(int count);
-    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit);
+    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost);
     friend int Pacman::WonOrLost(Food smallFood, Food bigFood, Text& Result);
     friend std::ostream& operator<<(std::ostream& os, const Food& food) {
         os << "Food: count=" << food.count << ", point=" << food.point << ", type=" << food.type;
@@ -189,7 +193,7 @@ public:
     int getW() const { return W; }
     Tile getTile(int y, int x) const { return Mase[y][x]; }
     void setTile(int y, int x, Tile tile) { Mase[y][x] = tile; }
-    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit);
+    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost);
     void createMap() {
         std::string tempMase[] = {
             "                              ",
@@ -304,7 +308,7 @@ public:
     Sprite getSprite() const { return sprite; }
     void setIsActive(bool active) { Fruit::isActive = active; }
     bool getIsActive() { return Fruit::isActive; }
-    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit);
+    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost);
 
     void createFruit(GameSettings& settings, Map& map, RenderWindow& window, Food food) {
         if ((food.getTotalFoodCount() == 176 || food.getTotalFoodCount() == 76) && !isActive)
@@ -332,7 +336,7 @@ public:
 
 bool Fruit::isActive = false;
 
-void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit)
+void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost)
 {
     if (Keyboard::isKeyPressed(Keyboard::Up) && map.Mase[nextY - 1][nextX].isPassable && !(nextY == 17 && nextX == 0 || nextY == 17 && nextX == map.getW() - 1)) {
         nextDirection = 0;
@@ -395,6 +399,7 @@ void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit)
         {
             addPoints(bigFood.point);
             bigFood.decreaseCount();
+            setGhostsFrightened(ghost, 3000);
         }
         if (fruit.isActive && nextX == fruit.x && nextY == fruit.y)
         {
@@ -420,18 +425,32 @@ int Pacman::WonOrLost(Food smallFood, Food bigFood, Text& Result)
     return f;
 }
 
+
 class Ghost {
-protected:                                         //модификатор protected
+public:
+    enum GhostState {
+        NORMAL,
+        FRIGHTENED,
+        EATEN
+    };
+protected:                       //модификатор protected                         
+    GhostState currentState;
+    int frightenedTimer;  // таймер для режима испуга                                      
     int x, y, score, direction, lastDirection;
 public:
     Ghost() {};
     ~Ghost() {};
-    Ghost(int x, int y, int score, int direction, int lastDirection) : x(x), y(y), score(score), direction(direction), lastDirection(lastDirection) {};
+    Ghost(int x, int y, int score, int direction, int lastDirection) : x(x), y(y), score(score), direction(direction), lastDirection(lastDirection), currentState(NORMAL), frightenedTimer(0) {};
     int getX() const { return x; }
     int getY() const { return y; }
     int getScore() const { return score; }
     int getDirection() const { return direction; }
     int getLastDirection() const { return lastDirection; }
+    GhostState getCurrentState() { return currentState; }
+    void setGhostState(GhostState state, int duration) {
+        currentState = state;
+        frightenedTimer = duration;
+    }
     void setAll(int a, int b, int c, int d, int e) { x = a, y = b, score = c, d = direction, e = lastDirection; }
 
     /*Ghost& operator=(const Ghost& other) {
@@ -474,82 +493,164 @@ public:
         return (sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2)));
     }
 
-    virtual void ghostDraw(RenderWindow& window, GameSettings settings) //делаем функцию виртуальной
+    void ghostDraw(sf::Color color, RenderWindow& window, GameSettings settings)
     {
         RectangleShape ghostShape(Vector2f(settings.getGridSize(), settings.getGridSize()));
-        ghostShape.setFillColor(Color::White);
+        if (currentState == FRIGHTENED)
+        {
+            ghostShape.setFillColor(sf::Color::White); //Синий цвет для испуганного состояния
+        }
+        else
+            ghostShape.setFillColor(color);
         ghostShape.setPosition(getX() * settings.getGridSize(), getY() * settings.getGridSize());
         window.draw(ghostShape);
     }
 
-    void drawGhostFromBase(RenderWindow& window, GameSettings settings)
+   /* void drawGhostFromBase(RenderWindow& window, GameSettings settings)
     {
         ghostDraw(window, settings);
-    }
+    }*/
 
-    void move(Map map, int goalX, int goalY) {
+    void move(Map map, int goalX, int goalY, Ghost** ghost) {
         float distanceUp, distanceDown, distanceLeft, distanceRight;
         double minDistance = INFINITY;
         int change = 0;
+        int f = 0;
 
-        distanceUp = distance(goalX, goalY, x, y - 1);
-        distanceDown = distance(goalX, goalY, x, y + 1);
-        if (y == 17 && x == 1)
-            distanceLeft = distance(goalX, goalY, map.getW() - 1, y);
-        else distanceLeft = distance(goalX, goalY, x - 1, y);
-        if (y == 17 && x == map.getW() - 1)
-            distanceRight = distance(goalX, goalY, 0, y);
-        else distanceRight = distance(goalX, goalY, x + 1, y);
-
-        if (distanceRight <= minDistance && map.getTile(y, x + 1).isPassable && lastDirection != 2) {
-            minDistance = distanceRight;
-            direction = 3;
-        }
-        if (distanceUp <= minDistance && map.getTile(y - 1, x).isPassable && lastDirection != 1 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
-            minDistance = distanceUp;
-            direction = 0;
-        }
-        if (distanceLeft <= minDistance && map.getTile(y, x - 1).isPassable && lastDirection != 3) {
-            minDistance = distanceLeft;
-            direction = 2;
-        }
-        if (distanceDown <= minDistance && map.getTile(y + 1, x).isPassable && lastDirection != 0 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
-            minDistance = distanceDown;
-            direction = 1;
-        }
-
-        score++;
-        if (score >= 150)
-        {
-            change = 1;
-            // Двигаемся в выбранном направлении
-            switch (direction) {
-            case 0: //Движение вверх
-                y--;
-                break;
-            case 1: //Движение вниз
-                y++;
-                break;
-            case 2: //Движение влево
-                if (y == 17 && x == 1)
-                    x = map.getW() - 2;
-                else
-                    x--;
-                break;
-            case 3: //Движение вправо
-                if (y == 17 && x == map.getW() - 2)
-                    x = 1;
-                else
-                    x++;
-                break;
-            default:
-                break;
+        if (currentState == FRIGHTENED) {
+            //случайное движение
+            frightenedTimer--;
+            if (frightenedTimer <= 0) {
+                currentState = NORMAL;
+                ghost[0]->setAll(11, 14, 0, 3, 3);
+                ghost[1]->setAll(13, 14, 0, 3, 3);
+                ghost[2]->setAll(15, 14, 0, 3, 3);
+                ghost[3]->setAll(17, 14, 0, 3, 3);
             }
-            score = 0;
-        }
+            score++;
+            if (score >= 400)
+            {
+                change = 1;
+                int newDirection;
+                do {
+                    newDirection = rand() % 4;
+                    f = 0; // Начинаем с предположения, что направление допустимо
 
-        if (lastDirection != direction && change)
-            lastDirection = direction;
+                    if (newDirection == 0) { // Вверх
+                        if (map.getTile(y - 1, x).isPassable && lastDirection != 1 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
+                            f = 1; // Установим f в 1, если направление подходит
+                        }
+                    }
+                    else if (newDirection == 1) { // Вниз
+                        if (map.getTile(y + 1, x).isPassable && lastDirection != 0 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
+                            f = 1; // Установим f в 1, если направление подходит
+                        }
+                    }
+                    else if (newDirection == 2) { // Влево
+                        if (map.getTile(y, x - 1).isPassable && lastDirection != 3) {
+                            f = 1; // Установим f в 1, если направление подходит
+                        }
+                    }
+                    else if (newDirection == 3) { // Вправо
+                        if (map.getTile(y, x + 1).isPassable && lastDirection != 2) {
+                            f = 1; // Установим f в 1, если направление подходит
+                        }
+                    }
+
+                    // Если f равно нулю, то цикл должен повторится
+                } while (f == 0);
+                direction = newDirection;
+              
+             
+                switch (direction) {
+                case 0: //Движение вверх
+                    y--;
+                    break;
+                case 1: //Движение вниз
+                    y++;
+                    break;
+                case 2: //Движение влево
+                    if (y == 17 && x == 1)
+                        x = map.getW() - 2;
+                    else
+                        x--;
+                    break;
+                case 3: //Движение вправо
+                    if (y == 17 && x == map.getW() - 2)
+                        x = 1;
+                    else
+                        x++;
+                    break;
+                default:
+                    break;
+                }
+                score = 0;
+            }
+
+            if (lastDirection != direction && change)
+                lastDirection = direction;
+        }
+        else
+        {
+            distanceUp = distance(goalX, goalY, x, y - 1);
+            distanceDown = distance(goalX, goalY, x, y + 1);
+            if (y == 17 && x == 1)
+                distanceLeft = distance(goalX, goalY, map.getW() - 1, y);
+            else distanceLeft = distance(goalX, goalY, x - 1, y);
+            if (y == 17 && x == map.getW() - 1)
+                distanceRight = distance(goalX, goalY, 0, y);
+            else distanceRight = distance(goalX, goalY, x + 1, y);
+
+            if (distanceRight <= minDistance && map.getTile(y, x + 1).isPassable && lastDirection != 2) {
+                minDistance = distanceRight;
+                direction = 3;
+            }
+            if (distanceUp <= minDistance && map.getTile(y - 1, x).isPassable && lastDirection != 1 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
+                minDistance = distanceUp;
+                direction = 0;
+            }
+            if (distanceLeft <= minDistance && map.getTile(y, x - 1).isPassable && lastDirection != 3) {
+                minDistance = distanceLeft;
+                direction = 2;
+            }
+            if (distanceDown <= minDistance && map.getTile(y + 1, x).isPassable && lastDirection != 0 && !(y == 17 && x == 0 || y == 17 && x == map.getW() - 1)) {
+                minDistance = distanceDown;
+                direction = 1;
+            }
+
+            score++;
+            if (score >= 150)
+            {
+                change = 1;
+                // Двигаемся в выбранном направлении
+                switch (direction) {
+                case 0: //Движение вверх
+                    y--;
+                    break;
+                case 1: //Движение вниз
+                    y++;
+                    break;
+                case 2: //Движение влево
+                    if (y == 17 && x == 1)
+                        x = map.getW() - 2;
+                    else
+                        x--;
+                    break;
+                case 3: //Движение вправо
+                    if (y == 17 && x == map.getW() - 2)
+                        x = 1;
+                    else
+                        x++;
+                    break;
+                default:
+                    break;
+                }
+                score = 0;
+            }
+
+            if (lastDirection != direction && change)
+                lastDirection = direction;
+        }
     }
 
     friend std::ostream& operator<<(std::ostream& os, const Ghost& ghost) {
@@ -557,6 +658,15 @@ public:
         return os;
     }
 };
+
+
+void Pacman::setGhostsFrightened(Ghost** ghosts, int duration) {
+    for (int i = 0; i < 4; ++i)
+    {
+        ghosts[i]->setGhostState(Ghost::FRIGHTENED, duration);
+    }
+}
+
 
 class Blinky : public Ghost {
 public:
@@ -570,9 +680,9 @@ public:
         ghostShape.setPosition(getX() * settings.getGridSize() + settings.getGridSize() / 6, getY() * settings.getGridSize() + settings.getGridSize() / 6); //другое положение и размер
         window.draw(ghostShape);
     }
-    void BlinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window) {
-        move(map, pacman.getX(), pacman.getY());
-        Ghost::ghostDraw(window, settings);
+    void BlinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window, Ghost** ghost) {
+        move(map, pacman.getX(), pacman.getY(), ghost);
+        Ghost::ghostDraw(settings.getBlinkyColor(), window, settings);
     }
 };
 
@@ -581,7 +691,7 @@ public:
     ~Pinky() {};
     Pinky() {};
     Pinky(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};    //вызов конструктора базового класса
-    void PinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window, Food food) {
+    void PinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window, Food food, Ghost** ghost) {
         int a = pacman.getX(), b = pacman.getY();
         switch (pacman.getNextDirection())
         {
@@ -662,8 +772,8 @@ public:
             if (lastDirection != direction && change)
                 lastDirection = direction;
         }
-        else Ghost::move(map, a, b); // Вызов метода базового класса
-        ghostDraw(window, settings);
+        else Ghost::move(map, a, b, ghost); // Вызов метода базового класса
+        ghostDraw(settings.getPinkyColor(), window, settings);
     }
 };
 
@@ -686,7 +796,7 @@ public:
         return *this;
     }
 
-    void InkyMove(Pacman pacman, Map map, Ghost blinky, GameSettings settings, RenderWindow& window) {
+    void InkyMove(Pacman pacman, Map map, Ghost blinky, GameSettings settings, RenderWindow& window, Ghost** ghost) {
         int a = pacman.getX(), b = pacman.getY();
         switch (pacman.getNextDirection())
         {
@@ -705,8 +815,8 @@ public:
         }
         a = blinky.getX() + 2 * (a - blinky.getX());
         b = blinky.getY() + 2 * (b - blinky.getY());
-        move(map, a, b);
-        ghostDraw(window, settings);
+        move(map, a, b, ghost);
+        ghostDraw(settings.getInkyColor(), window, settings);
     }
 };
 
@@ -716,15 +826,15 @@ public:
     Clyde() {};
     Clyde(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};   //вызов конструктора базового класса
 
-    void ghostDraw(RenderWindow& window, GameSettings settings) override                          //делаем функцию виртуальной, добавляем override для избежания ошибок переопределения
+   /* void ghostDraw(RenderWindow& window, GameSettings settings) override                          //делаем функцию виртуальной, добавляем override для избежания ошибок переопределения
     {
         CircleShape ghostShape(11);
         ghostShape.setFillColor(settings.getClydeColor());
         ghostShape.setPosition(getX() * settings.getGridSize() , getY() * settings.getGridSize() );
         window.draw(ghostShape);
-    }
+    }*/
 
-    void ClydeMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window) {
+    void ClydeMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window, Ghost** ghost) {
         int a, b;
         float mainDistance = distance(pacman.getX(), pacman.getY(), x, y);
         if (mainDistance > 8)
@@ -737,100 +847,260 @@ public:
             a = 0;
             b = map.getH();
         }
-        move(map, a, b);
-        ghostDraw(window, settings);
+        move(map, a, b, ghost);
+        ghostDraw(settings.getClydeColor(), window, settings);
     }
 
     int Lose(Pacman& pacman, Blinky& blinky, Pinky& pinky, Inky& inky)
     {
         int result = 0;
         if (pacman.getX() == blinky.getX() && pacman.getY() == blinky.getY()) {
-            pacman.loseLife();
-            result = 1;
+            if (blinky.getCurrentState() == Ghost::FRIGHTENED)
+            {
+                blinky.setAll(13, 16, 0, 3, 3);
+                pacman.addPoints(300);
+            }
+            else
+            {
+                pacman.loseLife();
+                result = 1;
+            }
         }
         else if (pacman.getX() == pinky.getX() && pacman.getY() == pinky.getY()) {
-            pacman.loseLife();
-            result = 1;
+            if (pinky.getCurrentState() == Ghost::FRIGHTENED)
+            {
+                pinky.setAll(16, 16, 0, 3, 3);
+                pacman.addPoints(300);
+            }
+            else
+            {
+                pacman.loseLife();
+                result = 1;
+            }
         }
         else if (pacman.getX() == inky.getX() && pacman.getY() == inky.getY()) {
-            pacman.loseLife();
-            result = 1;
+            if (inky.getCurrentState() == Ghost::FRIGHTENED)
+            {
+                inky.setAll(13, 18, 0, 3, 3);
+                pacman.addPoints(300);
+            }
+            else
+            {
+                pacman.loseLife();
+                result = 1;
+            }
         }
         else if (pacman.getX() == getX() && pacman.getY() == getY()) {
-            pacman.loseLife();
-            result = 1;
+            if (currentState == Ghost::FRIGHTENED)
+            {
+                setAll(16, 18, 0, 3, 3);
+                pacman.addPoints(300);
+            }
+            else
+            {
+                pacman.loseLife();
+                result = 1;
+            }
         }
         switch (pacman.getNextDirection()) {
         case 0:
             if (pacman.getX() == blinky.getX() && pacman.getY() - 1 == blinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (blinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    blinky.setAll(13, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() == pinky.getX() && pacman.getY() - 1 == pinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (pinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    pinky.setAll(16, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() == inky.getX() && pacman.getY() - 1 == inky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (inky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    inky.setAll(13, 18, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() == getX() && pacman.getY() - 1 == getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    setAll(16, 18, 0, 3, 3); 
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             break;
         case 1:
             if (pacman.getX() == blinky.getX() && pacman.getY() + 1 == blinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (blinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    blinky.setAll(13, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() == pinky.getX() && pacman.getY() + 1 == pinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (pinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    pinky.setAll(16, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() == inky.getX() && pacman.getY() + 1 == inky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (inky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    inky.setAll(13, 18, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() == getX() && pacman.getY() + 1 == getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    setAll(16, 18, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             break;
         case 2:
             if (pacman.getX() - 1 == blinky.getX() && pacman.getY() == blinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (blinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    blinky.setAll(13, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() - 1 == pinky.getX() && pacman.getY() == pinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (pinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                   pinky.setAll(16, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() - 1 == inky.getX() && pacman.getY() == inky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (inky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    inky.setAll(13, 18, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() - 1 == getX() && pacman.getY() == getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    setAll(16, 18, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             break;
         case 3:
             if (pacman.getX() + 1 == blinky.getX() && pacman.getY() == blinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (blinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    blinky.setAll(13, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }1;
             }
             else if (pacman.getX() + 1 == pinky.getX() && pacman.getY() == pinky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (pinky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    pinky.setAll(16, 16, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             else if (pacman.getX() + 1 == inky.getX() && pacman.getY() == inky.getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (inky.getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    inky.setAll(13, 18, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }1;
             }
             else if (pacman.getX() + 1 == getX() && pacman.getY() == getY()) {
-                pacman.loseLife();
-                result = 1;
+                if (getCurrentState() == Ghost::FRIGHTENED)
+                {
+                    setAll(16, 18, 0, 3, 3);
+                    pacman.addPoints(300);
+                }
+                else
+                {
+                    pacman.loseLife();
+                    result = 1;
+                }
             }
             break;
         }
@@ -882,7 +1152,6 @@ public:
         std::cout << "Настройки: \n" << settings << std::endl;
         std::cout << "Карта: \n" << map << std::endl;
         std::cout << "Пакман: " << pacman << std::endl << std::endl; // std::endl в конце каждого блока
-
     }
 };
 
@@ -1043,11 +1312,12 @@ int main()
         map.MasePaint(settings, window, smallFood, bigFood, fruitArray[randFruit].getSprite());
         if (pacman.WonOrLost(smallFood, bigFood, Result))
         {
-            for (int i = 0; i < 4; i++)
-            {
-                ghostArray[i]->ghostDraw(window, settings);
+            blinky.ghostDraw(settings.getBlinkyColor(), window, settings);
+            //combinedGhost.ghostDraw(Color::White, window, settings);
+            pinky.ghostDraw(settings.getPinkyColor(), window, settings);
+            inky.ghostDraw(settings.getInkyColor(), window, settings);
+            clyde.ghostDraw(settings.getClydeColor(), window, settings);
 
-            }
             sf::FloatRect textBounds = Result.getLocalBounds();
             sf::Vector2u windowSize = window.getSize();
             Result.setPosition((windowSize.x - textBounds.width) / 2, (windowSize.y - textBounds.height) / 2 - 50);
@@ -1057,13 +1327,13 @@ int main()
         }
         else
         {
-            pacman.PacmanMove(map, smallFood, bigFood, fruitArray[randFruit]);
+            pacman.PacmanMove(map, smallFood, bigFood, fruitArray[randFruit], ghostArray);
             //combinedGhost = blinky + pinky;
             //combinedGhost.ghostDraw(Color::White, window, settings);
-            blinky.BlinkyMove(pacman, map, settings, window);
-            pinky.PinkyMove(pacman, map, settings, window, smallFood);
-            inky.InkyMove(pacman, map, blinky, settings, window);
-            clyde.ClydeMove(pacman, map, settings, window);
+            blinky.BlinkyMove(pacman, map, settings, window, ghostArray);
+            pinky.PinkyMove(pacman, map, settings, window, smallFood, ghostArray);
+            inky.InkyMove(pacman, map, blinky, settings, window, ghostArray);
+            clyde.ClydeMove(pacman, map, settings, window, ghostArray);
             if (clyde.Lose(pacman, blinky, pinky, inky))
             {
                 if (pacman.getLives())
