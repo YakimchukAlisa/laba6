@@ -474,12 +474,17 @@ public:
         return (sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2)));
     }
 
-    void ghostDraw(sf::Color color, RenderWindow& window, GameSettings settings)
+    virtual void ghostDraw(RenderWindow& window, GameSettings settings) //делаем функцию виртуальной
     {
         RectangleShape ghostShape(Vector2f(settings.getGridSize(), settings.getGridSize()));
-        ghostShape.setFillColor(color);
+        ghostShape.setFillColor(Color::White);
         ghostShape.setPosition(getX() * settings.getGridSize(), getY() * settings.getGridSize());
         window.draw(ghostShape);
+    }
+
+    void drawGhostFromBase(RenderWindow& window, GameSettings settings)
+    {
+        ghostDraw(window, settings);
     }
 
     void move(Map map, int goalX, int goalY) {
@@ -567,7 +572,7 @@ public:
     }
     void BlinkyMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window) {
         move(map, pacman.getX(), pacman.getY());
-        ghostDraw(settings.getBlinkyColor(), window, settings);
+        Ghost::ghostDraw(window, settings);
     }
 };
 
@@ -658,7 +663,7 @@ public:
                 lastDirection = direction;
         }
         else Ghost::move(map, a, b); // Вызов метода базового класса
-        ghostDraw(settings.getPinkyColor(), window, settings);
+        ghostDraw(window, settings);
     }
 };
 
@@ -701,7 +706,7 @@ public:
         a = blinky.getX() + 2 * (a - blinky.getX());
         b = blinky.getY() + 2 * (b - blinky.getY());
         move(map, a, b);
-        ghostDraw(settings.getInkyColor(), window, settings);
+        ghostDraw(window, settings);
     }
 };
 
@@ -710,6 +715,15 @@ public:
     ~Clyde() {};
     Clyde() {};
     Clyde(int x, int y, int score, int direction, int lastDirection) : Ghost(x, y, score, direction, lastDirection) {};   //вызов конструктора базового класса
+
+    void ghostDraw(RenderWindow& window, GameSettings settings) override                          //делаем функцию виртуальной, добавляем override для избежания ошибок переопределения
+    {
+        CircleShape ghostShape(11);
+        ghostShape.setFillColor(settings.getClydeColor());
+        ghostShape.setPosition(getX() * settings.getGridSize() , getY() * settings.getGridSize() );
+        window.draw(ghostShape);
+    }
+
     void ClydeMove(Pacman pacman, Map map, GameSettings settings, RenderWindow& window) {
         int a, b;
         float mainDistance = distance(pacman.getX(), pacman.getY(), x, y);
@@ -724,7 +738,7 @@ public:
             b = map.getH();
         }
         move(map, a, b);
-        ghostDraw(settings.getClydeColor(), window, settings);
+        ghostDraw(window, settings);
     }
 
     int Lose(Pacman& pacman, Blinky& blinky, Pinky& pinky, Inky& inky)
@@ -909,19 +923,19 @@ int main()
     sf::Sprite appleShape;
     appleShape.setTexture(appleTexture);
     appleShape.setScale(0.02f, 0.02f);
-    
+
     sf::Texture pearTexture;
     pearTexture.loadFromFile("images/pear.png");
     sf::Sprite pearShape;
     pearShape.setTexture(pearTexture);
     pearShape.setScale(0.1f, 0.1f);
-    
+
     sf::Texture orangeTexture;
     orangeTexture.loadFromFile("images/orange.png");
     sf::Sprite orangeShape;
     orangeShape.setTexture(orangeTexture);
     orangeShape.setScale(0.1f, 0.1f);
-   
+
     sf::Texture watermelonTexture;
     watermelonTexture.loadFromFile("images/watermelon.png");
     sf::Sprite watermelonShape;
@@ -931,10 +945,10 @@ int main()
     //массив фруктов
     Fruit fruitArray[5];
     fruitArray[0] = Fruit(20, cherryShape);
-    fruitArray[1] =Fruit(30, appleShape);
+    fruitArray[1] = Fruit(30, appleShape);
     fruitArray[2] = Fruit(40, pearShape);
     fruitArray[3] = Fruit(50, orangeShape);
-    fruitArray[4] = Fruit(60,  watermelonShape);
+    fruitArray[4] = Fruit(60, watermelonShape);
     int randFruit = 0;
 
     //массив динамических объектов класса Ghost
@@ -1005,7 +1019,6 @@ int main()
      // Координаты pinky после pinky++: x=14, y=14
      // Координаты tempPinky после pinky++: x=13, y=14
 
-
     std::cout << "Настройки: \n" << settings << std::endl;
     std::cout << "Карта: \n" << map << std::endl;
     std::cout << "Пакман: " << pacman << std::endl << std::endl; // std::endl в конце каждого блока
@@ -1030,17 +1043,17 @@ int main()
         map.MasePaint(settings, window, smallFood, bigFood, fruitArray[randFruit].getSprite());
         if (pacman.WonOrLost(smallFood, bigFood, Result))
         {
-            blinky.ghostDraw(settings.getBlinkyColor(), window, settings);
-            //combinedGhost.ghostDraw(Color::White, window, settings);
-            pinky.ghostDraw(settings.getPinkyColor(), window, settings);
-            inky.ghostDraw(settings.getInkyColor(), window, settings);
-            clyde.ghostDraw(settings.getClydeColor(), window, settings);
+            for (int i = 0; i < 4; i++)
+            {
+                ghostArray[i]->ghostDraw(window, settings);
+
+            }
             sf::FloatRect textBounds = Result.getLocalBounds();
             sf::Vector2u windowSize = window.getSize();
             Result.setPosition((windowSize.x - textBounds.width) / 2, (windowSize.y - textBounds.height) / 2 - 50);
             window.draw(Result);
             pacman.updateMaxPoints(pacman.getPoints());
-  
+
         }
         else
         {
