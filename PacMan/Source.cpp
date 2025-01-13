@@ -104,6 +104,34 @@ public:
     }
 };
 
+class InputManager {
+public:
+    virtual ~InputManager() = default;
+    virtual int getDirection() = 0;  // 0: вверх, 1: вниз, 2: влево, 3: вправо, -1: нет ввода
+};
+
+class KeyboardInput : public InputManager {
+public:
+    int getDirection() override {
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) return 0;  // Вверх (W)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) return 1;  // Вниз (S)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) return 2;  // Влево (A)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) return 3;  // Вправо (D)
+        return -1; // Нет ввода
+    }
+};
+
+class ArrowInput : public InputManager {
+public:
+    int getDirection() override {
+        if (Keyboard::isKeyPressed(Keyboard::Up)) return 0;
+        if (Keyboard::isKeyPressed(Keyboard::Down)) return 1;
+        if (Keyboard::isKeyPressed(Keyboard::Left)) return 2;
+        if (Keyboard::isKeyPressed(Keyboard::Right)) return 3;
+        return -1;
+    }
+};
+
 class Pacman {
 private:
     int x, y, nextX, nextY, score, nextDirection, lives, points;
@@ -135,7 +163,7 @@ public:
         return lives;
     }
 
-    void PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit,Ghost** ghost);
+    void PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit,Ghost** ghost, InputManager& inputManager);
 
     int WonOrLost(Food smallFood, Food bigFood, Text& Result);
     friend std::ostream& operator<<(std::ostream& os, const Pacman& pacman) {
@@ -171,7 +199,7 @@ public:
     void decreaseCount() { count--; totalFoodCount--; }
     static int getTotalFoodCount();
     static void setTotalFoodCount(int count);
-    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost);
+    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost, InputManager& inputManager);
     friend int Pacman::WonOrLost(Food smallFood, Food bigFood, Text& Result);
     friend std::ostream& operator<<(std::ostream& os, const Food& food) {
         os << "Food: count=" << food.count << ", point=" << food.point << ", type=" << food.type;
@@ -193,7 +221,7 @@ public:
     int getW() const { return W; }
     Tile getTile(int y, int x) const { return Mase[y][x]; }
     void setTile(int y, int x, Tile tile) { Mase[y][x] = tile; }
-    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost);
+    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost, InputManager& inputManager);
     void createMap() {
         std::string tempMase[] = {
             "                              ",
@@ -308,7 +336,7 @@ public:
     Sprite getSprite() const { return sprite; }
     void setIsActive(bool active) { Fruit::isActive = active; }
     bool getIsActive() { return Fruit::isActive; }
-    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost);
+    friend void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost, InputManager& inputManager);
 
     void createFruit(GameSettings& settings, Map& map, RenderWindow& window, Food food) {
         if ((food.getTotalFoodCount() == 176 || food.getTotalFoodCount() == 76) && !isActive)
@@ -336,24 +364,25 @@ public:
 
 bool Fruit::isActive = false;
 
-void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost)
+void Pacman::PacmanMove(Map& map, Food& smallFood, Food& bigFood, Fruit& fruit, Ghost** ghost, InputManager& inputManager)
 {
-    if (Keyboard::isKeyPressed(Keyboard::Up) && map.Mase[nextY - 1][nextX].isPassable && !(nextY == 17 && nextX == 0 || nextY == 17 && nextX == map.getW() - 1)) {
+    int direction = inputManager.getDirection();
+    if (direction == 0 && map.Mase[nextY - 1][nextX].isPassable && !(nextY == 17 && nextX == 0 || nextY == 17 && nextX == map.getW() - 1)) {
         nextDirection = 0;
         nextX = x;
         nextY = y;
     }
-    if (Keyboard::isKeyPressed(Keyboard::Down) && map.Mase[nextY + 1][nextX].isPassable && !(nextY == 17 && nextX == 0 || nextY == 17 && nextX == map.getW() - 1)) {
+    if (direction == 1 && map.Mase[nextY + 1][nextX].isPassable && !(nextY == 17 && nextX == 0 || nextY == 17 && nextX == map.getW() - 1)) {
         nextDirection = 1;
         nextX = x;
         nextY = y;
     }
-    if (Keyboard::isKeyPressed(Keyboard::Left) && (map.Mase[nextY][nextX - 1].isPassable)) {
+    if (direction == 2 && (map.Mase[nextY][nextX - 1].isPassable)) {
         nextDirection = 2;
         nextX = x;
         nextY = y;
     }
-    if (Keyboard::isKeyPressed(Keyboard::Right) && (map.Mase[nextY][nextX + 1].isPassable)) {
+    if (direction == 3 && (map.Mase[nextY][nextX + 1].isPassable)) {
         nextDirection = 3;
         nextX = x;
         nextY = y;
@@ -1164,6 +1193,7 @@ int main()
     freopen_s(&fDummy, "CONOUT$", "w", stderr);
     freopen_s(&fDummy, "CONIN$", "r", stdin);
     Game game;
+    ArrowInput inputManager;
     //динамический массив объектов класса GameSettings 
     GameSettings* settingsArray;
     settingsArray = new GameSettings[2];
@@ -1327,7 +1357,7 @@ int main()
         }
         else
         {
-            pacman.PacmanMove(map, smallFood, bigFood, fruitArray[randFruit], ghostArray);
+            pacman.PacmanMove(map, smallFood, bigFood, fruitArray[randFruit], ghostArray, inputManager);
             //combinedGhost = blinky + pinky;
             //combinedGhost.ghostDraw(Color::White, window, settings);
             blinky.BlinkyMove(pacman, map, settings, window, ghostArray);
